@@ -18,18 +18,14 @@
 //
 
 cplusplus {{
-#include "applications/dymo/DYMO_PacketBBMessage_m.h"
-#include "applications/dymo/DYMO_AddressBlock.h"
-
 #include <vector>
 #include <sys/types.h>
 
-using namespace std;
-
-typedef vector<DYMO_AddressBlock> VectorOfDYMOAddressBlocks;
-
+#include "applications/dymo/DYMO_PacketBBMessage_m.h"
+#include "applications/dymo/DYMO_AddressBlock.h"
 #include "applications/dymo/InspectorHelpers.h"
 
+typedef std::vector<DYMO_AddressBlock> VectorOfDYMOAddressBlocks;
 }}
 
 
