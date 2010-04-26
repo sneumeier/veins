@@ -20,6 +20,24 @@
 
 #include "UWBIRIEEE802154APathlossModel.h"
 
+const double UWBIRIEEE802154APathlossModel::PL0;
+const double UWBIRIEEE802154APathlossModel::pathloss_exponent;
+const double UWBIRIEEE802154APathlossModel::meanL;
+const double UWBIRIEEE802154APathlossModel::Lambda;
+const double UWBIRIEEE802154APathlossModel::lambda1;
+const double UWBIRIEEE802154APathlossModel::lambda2;
+const double UWBIRIEEE802154APathlossModel::Beta;
+const double UWBIRIEEE802154APathlossModel::Gamma;
+const double UWBIRIEEE802154APathlossModel::k_gamma;
+const double UWBIRIEEE802154APathlossModel::gamma_0;
+const double UWBIRIEEE802154APathlossModel::sigma_cluster;
+const double UWBIRIEEE802154APathlossModel::fc;
+const double UWBIRIEEE802154APathlossModel::BW;
+const double UWBIRIEEE802154APathlossModel::fcMHz;
+const double UWBIRIEEE802154APathlossModel::d0;
+const double UWBIRIEEE802154APathlossModel::ntx;
+const double UWBIRIEEE802154APathlossModel::nrx;
+
 const bool UWBIRIEEE802154APathlossModel::implemented_CMs[] = {
         		false, //  There is no Channel Model 0: start at 1
         		true,  //  CM1

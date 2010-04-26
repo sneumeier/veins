@@ -21,6 +21,11 @@
 
 double UWBIRStochasticPathlossModel::n1_limit = 1.25;
 double UWBIRStochasticPathlossModel::n2_limit = 2;
+const double UWBIRStochasticPathlossModel::Gtx, UWBIRStochasticPathlossModel::Grx, UWBIRStochasticPathlossModel::ntx, UWBIRStochasticPathlossModel::nrx;
+const double UWBIRStochasticPathlossModel::fc; 
+const double UWBIRStochasticPathlossModel::d0;
+const double UWBIRStochasticPathlossModel::s_mu, UWBIRStochasticPathlossModel::s_sigma;
+const double UWBIRStochasticPathlossModel::kappa;
 
 double UWBIRStochasticPathlossModel::simtruncnormal(double mean, double stddev, double a, int rng) {
     double res = a + 1;

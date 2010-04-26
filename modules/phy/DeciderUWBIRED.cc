@@ -36,6 +36,9 @@
 #include "PhyLayerUWBIR.h"
 #include "AirFrameUWBIR_m.h"
 
+const double DeciderUWBIRED::noiseVariance;
+const double DeciderUWBIRED::peakPulsePower;
+
 simtime_t DeciderUWBIRED::processSignal(AirFrame* frame) {
 	Signal* s = &frame->getSignal();
 	map<Signal*, int>::iterator it = currentSignals.find(s);
