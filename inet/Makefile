@@ -15,8 +15,8 @@ cleanall: checkmakefiles
 	rm -f tests/Makefile
 
 makefiles:
-	cd src && opp_makemake -f --deep --make-so -o mixnet -O out $$NSC_VERSION_DEF
-	cd tests && opp_makemake -f --deep --make-so -o mixnet -O out $$NSC_VERSION_DEF
+	cd src && opp_makemake -I../../inet4mixnet/src -I../../inet4mixnet/src/linklayer/contract -I../../inet4mixnet/src/base -I../../inet4mixnet/src/networklayer/common -I../../base/modules -I../../base/utils -f --deep --make-so -o mixnet -O out $$NSC_VERSION_DEF
+	cd tests && opp_makemake -I../../inet4mixnet/src -I../../inet4mixnet/src/linklayer/contract -I../../inet4mixnet/src/base -I../../inet4mixnet/src/networklayer/common -I../../base/modules -I../../base/utils -I../src/modules -I../../tests/testUtils -f --deep --make-so -o mixnet -O out $$NSC_VERSION_DEF
 
 checkmakefiles:
 	@if [ ! -f src/Makefile ]; then \
