@@ -1,3 +1,6 @@
 base
 examples
+inet/src/modules
+inet/src/nodes
+inet4mixnet/src
 modules
