@@ -50,11 +50,17 @@ void IP::initialize()
 
     numMulticast = numLocalDeliver = numDropped = numUnroutable = numForwarded = 0;
 
+    hooks.clear();
+
     WATCH(numMulticast);
     WATCH(numLocalDeliver);
     WATCH(numDropped);
     WATCH(numUnroutable);
     WATCH(numForwarded);
+}
+
+void IP::finish() {
+	QueueBase::finish();
 }
 
 void IP::updateDisplayString()
@@ -113,6 +119,10 @@ void IP::handlePacketFromNetwork(IPDatagram *datagram)
             icmpAccess.get()->sendErrorMessage(datagram, ICMP_PARAMETER_PROBLEM, 0);
             return;
         }
+    }
+
+    if (datagramPreRoutingHook(datagram, getSourceInterfaceFrom(datagram)) != IP::Hook::ACCEPT) {
+        return;
     }
 
     // remove control info
@@ -183,6 +193,14 @@ void IP::handleMessageFromHL(cPacket *msg)
     // encapsulate and send
     InterfaceEntry *destIE; // will be filled in by encapsulate()
     IPDatagram *datagram = encapsulate(msg, destIE);
+    datagramLocalOut(datagram, destIE);
+}
+
+void IP::datagramLocalOut(IPDatagram* datagram, InterfaceEntry* destIE) {
+    // TODO: should the check for ift->numInterfaces()!=0 be after this?
+    if (datagramLocalOutHook(datagram, destIE) != IP::Hook::ACCEPT) {
+        return;
+    }
 
     // route packet
     if (!datagram->getDestAddress().isMulticast())
@@ -255,6 +273,10 @@ void IP::routePacket(IPDatagram *datagram, InterfaceEntry *destIE, bool fromHL)
     EV << "output interface is " << destIE->getName() << ", next-hop address: " << nextHopAddr << "\n";
     numForwarded++;
 
+    if (!fromHL) if (datagramForwardHook(datagram, getSourceInterfaceFrom(datagram), destIE, nextHopAddr) != IP::Hook::ACCEPT) {
+        return;
+    }
+
     //
     // fragment and send the packet
     //
@@ -321,6 +343,10 @@ void IP::routeMulticastPacket(IPDatagram *datagram, InterfaceEntry *destIE, Inte
         if (datagram->getSrcAddress().isUnspecified())
             datagram->setSrcAddress(destIE->ipv4Data()->getIPAddress());
 
+        if (fromIE) if (datagramForwardHook(datagram, getSourceInterfaceFrom(datagram), destIE, datagram->getDestAddress()) != IP::Hook::ACCEPT) {
+            return;
+        }
+
         // send
         fragmentAndSend(datagram, destIE, datagram->getDestAddress());
 
@@ -349,6 +375,10 @@ void IP::routeMulticastPacket(IPDatagram *datagram, InterfaceEntry *destIE, Inte
                 // set datagram source address if not yet set
                 if (datagramCopy->getSrcAddress().isUnspecified())
                     datagramCopy->setSrcAddress(destIE->ipv4Data()->getIPAddress());
+
+                if (fromIE) if (datagramForwardHook(datagramCopy, getSourceInterfaceFrom(datagramCopy), destIE, routes[i].gateway) != IP::Hook::ACCEPT) {
+                    continue;
+                }
 
                 // send
                 IPAddress nextHopAddr = routes[i].gateway;
@@ -383,6 +413,10 @@ void IP::reassembleAndDeliver(IPDatagram *datagram)
             return;
         }
         EV << "This fragment completes the datagram.\n";
+    }
+
+    if (datagramLocalInHook(datagram, getSourceInterfaceFrom(datagram)) != IP::Hook::ACCEPT) {
+        return;
     }
 
     // decapsulate and send on appropriate output gate
@@ -432,6 +466,10 @@ cPacket *IP::decapsulateIP(IPDatagram *datagram)
 
 void IP::fragmentAndSend(IPDatagram *datagram, InterfaceEntry *ie, IPAddress nextHopAddr)
 {
+    if (datagramPostRoutingHook(datagram, getSourceInterfaceFrom(datagram), ie, nextHopAddr) != IP::Hook::ACCEPT) {
+        return;
+    }
+
     int mtu = ie->getMTU();
 
     // check if datagram does not require fragmentation
@@ -577,4 +615,90 @@ void IP::sendDatagramToOutput(IPDatagram *datagram, InterfaceEntry *ie, IPAddres
     send(datagram, queueOutGate);
 }
 
+void IP::registerHook(int priority, IP::Hook* hook) {
+    Enter_Method("registerHook()");
+    hooks.insert(std::pair<int, IP::Hook*>(priority, hook));
+}
+
+void IP::unregisterHook(int priority, IP::Hook* hook) {
+    Enter_Method("unregisterHook()");
+    for (std::multimap<int, IP::Hook*>::iterator iter = hooks.begin(); iter != hooks.end(); iter++) {
+        if ((iter->first == priority) && (iter->second == hook)) {
+            hooks.erase(iter);
+            return;
+        }
+    }
+}
+
+void IP::reinjectDatagram(const IPDatagram* datagram, IP::Hook::Result verdict) {
+    Enter_Method("reinjectDatagram()");
+    for (std::list<QueuedDatagramForHook>::iterator iter = queuedDatagramsForHooks.begin(); iter != queuedDatagramsForHooks.end(); iter++) {
+        if (iter->datagram == datagram) {
+            IPDatagram* datagram = iter->datagram;
+            InterfaceEntry* outIE = iter->outIE;
+            QueuedDatagramForHook::Hook hook = iter->hook;
+            queuedDatagramsForHooks.erase(iter);
+            switch (hook) {
+                case QueuedDatagramForHook::LOCALOUT:
+                    if (verdict == IP::Hook::DROP) {
+                        delete datagram;
+                        return;
+                    } else {
+                        datagramLocalOut(datagram, outIE);
+                    }
+                    break;
+                default:
+                    error("Re-injection of datagram queued for this hook not implemented");
+                    break;
+            }
+            return;
+        }
+    }
+}
+
+IP::Hook::Result IP::datagramPreRoutingHook(const IPDatagram* datagram, const InterfaceEntry* inIE) {
+    for (std::multimap<int, IP::Hook*>::iterator iter = hooks.begin(); iter != hooks.end(); iter++) {
+        IP::Hook::Result r = iter->second->datagramPreRoutingHook(datagram, inIE, this);
+        if (r == IP::Hook::DROP) delete datagram;
+        if (r != IP::Hook::ACCEPT) return r;
+    }
+    return IP::Hook::ACCEPT;
+}
+
+IP::Hook::Result IP::datagramLocalInHook(const IPDatagram* datagram, const InterfaceEntry* inIE) {
+    for (std::multimap<int, IP::Hook*>::iterator iter = hooks.begin(); iter != hooks.end(); iter++) {
+        IP::Hook::Result r = iter->second->datagramLocalInHook(datagram, inIE, this);
+        if (r == IP::Hook::DROP) delete datagram;
+        if (r != IP::Hook::ACCEPT) return r;
+    }
+    return IP::Hook::ACCEPT;
+}
+
+IP::Hook::Result IP::datagramForwardHook(const IPDatagram* datagram, const InterfaceEntry* inIE, const InterfaceEntry* outIE, const IPAddress& nextHopAddr) {
+    for (std::multimap<int, IP::Hook*>::iterator iter = hooks.begin(); iter != hooks.end(); iter++) {
+        IP::Hook::Result r = iter->second->datagramForwardHook(datagram, inIE, outIE, nextHopAddr, this);
+        if (r == IP::Hook::DROP) delete datagram;
+        if (r != IP::Hook::ACCEPT) return r;
+    }
+    return IP::Hook::ACCEPT;
+}
+
+IP::Hook::Result IP::datagramPostRoutingHook(const IPDatagram* datagram, const InterfaceEntry* inIE, const InterfaceEntry* outIE, const IPAddress& nextHopAddr) {
+    for (std::multimap<int, IP::Hook*>::iterator iter = hooks.begin(); iter != hooks.end(); iter++) {
+        IP::Hook::Result r = iter->second->datagramPostRoutingHook(datagram, inIE, outIE, nextHopAddr, this);
+        if (r == IP::Hook::DROP) delete datagram;
+        if (r != IP::Hook::ACCEPT) return r;
+    }
+    return IP::Hook::ACCEPT;
+}
+
+IP::Hook::Result IP::datagramLocalOutHook(IPDatagram* datagram, InterfaceEntry* outIE) {
+    for (std::multimap<int, IP::Hook*>::iterator iter = hooks.begin(); iter != hooks.end(); iter++) {
+        IP::Hook::Result r = iter->second->datagramLocalOutHook(datagram, outIE, this);
+        if (r == IP::Hook::QUEUE) { queuedDatagramsForHooks.push_back(QueuedDatagramForHook(datagram, outIE, QueuedDatagramForHook::LOCALOUT)); return r; }
+        if (r == IP::Hook::DROP) delete datagram;
+        if (r != IP::Hook::ACCEPT) return r;
+    }
+    return IP::Hook::ACCEPT;
+}
 
