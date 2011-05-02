@@ -1,0 +1,2 @@
+#!/bin/sh
+opp_run -l../../base/miximbase -l../../modules/miximmodules -l../../inet4mixnet/src/inet -l../../inet/src/mixnet -n../../base:../../modules:../../inet/src:../../inet4mixnet/src:.. "$@"
